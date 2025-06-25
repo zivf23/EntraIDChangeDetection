@@ -1,0 +1,15 @@
+# Flask
+Flask
+python-dotenv
+Flask-Cors
+gunicorn
+
+# Microsoft Graph
+msal
+requests
+
+# OpenAI
+openai
+
+# Scheduler
+APScheduler

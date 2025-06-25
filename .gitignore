@@ -1,0 +1,37 @@
+# ===================================================================
+# FILENAME: .gitignore
+# PURPOSE: מניעת העלאת קבצים לא רצויים ל-Git.
+# ===================================================================
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Database
+monitor_data.db
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+build/
+.DS_Store
+coverage/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+
+secrets/
