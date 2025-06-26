@@ -15,7 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 def check_env_variables():
     """בודק שמשתני הסביבה החיוניים קיימים בעת עליית השרת."""
     # Import the secrets from config.py
-    from backend.config import GRAPH_CLIENT_ID, GRAPH_TENANT_ID, GRAPH_CLIENT_SECRET
+    from config import GRAPH_CLIENT_ID, GRAPH_TENANT_ID, GRAPH_CLIENT_SECRET    
     
     required = {
         "GRAPH_CLIENT_ID": GRAPH_CLIENT_ID,
