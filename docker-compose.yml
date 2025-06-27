@@ -1,5 +1,4 @@
-# docker-compose.yml (Final Corrected Version)
-# docker-compose.yml (Final Corrected Version)
+# docker-compose.yml
 services:
   backend:
     build:
@@ -13,11 +12,10 @@ services:
     ports:
       - "5000:5000"
     volumes:
-       - ./backend:/code/backend
+      - ./backend:/app
     env_file:
       - ./.env
-    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --reload --log-level=debug "app:app"
-
+    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --reload --log-level=debug app:app
   frontend:
     build:
       context: ./frontend
@@ -30,17 +28,15 @@ services:
       - WATCHPACK_POLLING=true
     depends_on:
       - backend
-
 networks:
   default:
     name: entra-monitor-dev-network
-
 secrets:
   graph_tenant_id:
-    file: ${SECRETS_DIR}\graph_tenant_id.txt
+    file: ${SECRETS_DIR}/graph_tenant_id.txt
   graph_client_id:
-    file: ${SECRETS_DIR}\graph_client_id.txt
+    file: ${SECRETS_DIR}/graph_client_id.txt
   graph_client_secret:
-    file: ${SECRETS_DIR}\graph_client_secret.txt
+    file: ${SECRETS_DIR}/graph_client_secret.txt
   openai_api_key:
-    file: ${SECRETS_DIR}\openai_api_key.txt
+    file: ${SECRETS_DIR}/openai_api_key.txt

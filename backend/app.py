@@ -1,31 +1,26 @@
-# ===================================================================
-# FILENAME: app.py
-# PURPOSE: השרת הראשי של Flask. הקוד שלך נשמר במלואו.
-# UPDATED: היבואים תוקנו לעבוד בצורה מוחלטת (absolute imports)
-#          והבדיקות הועברו לתחילת הקובץ.
-# ===================================================================
+# backend/app.py
 import os
 import sys
 from functools import wraps
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# --- Environment validation ---
+# Verify critical environment variables (secrets) on startup
+from config import GRAPH_CLIENT_ID, GRAPH_TENANT_ID, GRAPH_CLIENT_SECRET
+
 def check_env_variables():
-    """בודק שמשתני הסביבה החיוניים קיימים בעת עליית השרת."""
-    # Import the secrets from config.py
-    from config import GRAPH_CLIENT_ID, GRAPH_TENANT_ID, GRAPH_CLIENT_SECRET    
-    
+    """Verify that essential environment variables/secrets are present at startup."""
     required = {
         "GRAPH_CLIENT_ID": GRAPH_CLIENT_ID,
         "GRAPH_TENANT_ID": GRAPH_TENANT_ID,
-        "GRAPH_CLIENT_SECRET": GRAPH_CLIENT_SECRET,
+        "GRAPH_CLIENT_SECRET": GRAPH_CLIENT_SECRET
     }
     print("\n--- Verifying Environment Variables ---")
     for k, v in required.items():
-        masked = '********' if v and 'SECRET' in k else v or 'Not Set'
-        print(f"  {k}: {masked}")
+        masked = '********' if v and 'SECRET' in k else (v or 'Not Set')
+        print(f" {k}: {masked}")
     print("---------------------------------------\n")
     missing = [k for k, v in required.items() if not v]
     if missing:
@@ -35,24 +30,21 @@ def check_env_variables():
 
 check_env_variables()
 
-# --- Delayed imports (after env check) ---
-# 💡 שינוי: שימוש ב-absolute imports מהשורש של ה-backend.
-from backend.monitor import check_for_changes
-from backend.db import get_all_snapshots, get_snapshot_details
-from backend.config import CHECK_INTERVAL_MINUTES
+# Delayed imports (after ensuring env/secrets are loaded)
+from monitor import check_for_changes
+from db import get_all_snapshots, get_snapshot_details, init_app as init_db
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}}) # הגדרה מפורשת יותר של CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# --- Basic Auth ---
+# Basic Authentication setup
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "admin")
-
 if ADMIN_PASS == "admin":
     print("WARNING: Using default admin password. Set ADMIN_PASS environment variable for security.")
 
 def auth_required(fn):
-    """Decorator to enforce basic authentication."""
+    """Decorator to enforce basic authentication on API routes."""
     @wraps(fn)
     def wrapper(*args, **kwargs):
         auth = request.authorization
@@ -63,18 +55,19 @@ def auth_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
-# --- Routes ---
+# API Routes
+
 @app.route('/api/snapshots', methods=['GET'])
 @auth_required
 def snapshots():
-    """מחזיר רשימה של כל ה-Snapshots."""
+    """Return a list of all snapshots (id and timestamp)."""
     all_snapshots = get_all_snapshots()
     return jsonify(all_snapshots)
 
 @app.route('/api/snapshots/<int:snap_id>', methods=['GET'])
 @auth_required
 def snapshot_detail(snap_id):
-    """מחזיר פרטים מלאים על Snapshot ספציפי, כולל המצב הקודם להשוואה."""
+    """Return full details of a specific snapshot, including previous state for comparison."""
     details = get_snapshot_details(snap_id)
     if not details:
         return jsonify({'message': 'Snapshot not found'}), 404
@@ -82,30 +75,20 @@ def snapshot_detail(snap_id):
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """בדיקת "דופק" פשוטה כדי לוודא שהשרת רץ."""
+    """Simple health check endpoint to verify the server is running."""
     return jsonify({"status": "ok"}), 200
 
-# --- Scheduler ---
-def run_scheduler():
-    """מפעיל את ה-Scheduler לבדיקות תקופתיות."""
-    scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(check_for_changes, 'interval', minutes=CHECK_INTERVAL_MINUTES, id="policy_check_job")
-    
-    # מניעת ריצה כפולה בסביבת פיתוח של Flask (עם reloader)
-    if not scheduler.get_job('policy_check_job') or not os.environ.get('WERKZEUG_RUN_MAIN'):
-        scheduler.start()
-        print(f"Scheduler started. Will check for changes every {CHECK_INTERVAL_MINUTES} minutes.")
-        
-        # הרצה ראשונית אחת כדי לקבל נתונים מיד
-        print("Performing initial configuration check...")
-        try:
-            with app.app_context():
-                check_for_changes()
-        except Exception as e:
-            print(f"Initial check failed: {e}", file=sys.stderr)
+# Scheduler setup for periodic change detection
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(func=check_for_changes, trigger='interval', minutes=int(os.environ.get("CHECK_INTERVAL_MINUTES", 10)), id="policy_check_job")
 
-run_scheduler()
+# Prevent double scheduling in debug mode with reloader
+if not os.environ.get('WERKZEUG_RUN_MAIN'):
+    scheduler.start()
+    print(f"Scheduler started. Will check for changes every {os.environ.get('CHECK_INTERVAL_MINUTES', 10)} minutes.")
+    # Perform one immediate check on startup
+    print("Performing initial configuration check...")
+    check_for_changes()
 
-if __name__ == '__main__':
-    # הרצה מקומית לצורכי דיבוג בלבד
-    app.run(host='0.0.0.0', port=5000, debug=True)
+# Initialize the database (create tables if not exist)
+init_db(app)

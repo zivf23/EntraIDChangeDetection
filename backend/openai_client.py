@@ -1,50 +1,36 @@
-# ===================================================================
-# FILENAME: openai_client.py
-# Description: Handles communication with the OpenAI API.
-# UPDATED: Your test script was converted into a reusable function.
-# ===================================================================
+# backend/openai_client.py
 import os
-from openai import OpenAI
-from backend.config import OPENAI_API_KEY, OPENAI_MODEL
+import openai
 
-def get_change_explanation(changes_list):
-    """
-    Sends a list of changes to GPT and asks for a one-sentence summary in Hebrew.
-    """
-    if not OPENAI_API_KEY:
-        print("[OpenAI] OPENAI_API_KEY is not set. Skipping explanation.")
-        return "ניתוח GPT לא זמין. מפתח API חסר."
+from config import OPENAI_API_KEY, OPENAI_MODEL
 
-    if not changes_list:
-        return "לא זוהו שינויים."
+# Initialize OpenAI API key
+openai.api_key = OPENAI_API_KEY
 
-    # In case of initial capture, provide a standard explanation.
-    if len(changes_list) == 1 and "Initial configuration" in changes_list[0]:
-        return "זוהי התצורה הראשונית של המדיניות שנשמרה במערכת. אין שינויים קודמים להשוואה."
-    
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    
-    changes_str = "\n".join(f"- {change}" for change in changes_list)
-    prompt = f"""
-    You are an expert Israeli cyber-security analyst.
-    The following changes were detected in Microsoft Entra Conditional Access policies.
-    Please explain the overall security impact in one clear sentence in Hebrew.
-    Focus on the risk or benefit. For example: "השינויים מחזקים את האבטחה על ידי דרישת אימות רב-גורמי למשתמשים נוספים."
-
-    Changes:
-    {changes_str}
-    """
-
+def get_explanation(changes):
+    """Generate an explanatory report for a list of configuration changes using GPT."""
+    if not changes:
+        return ""
+    # Format the changes list into a numbered or bulleted list in the prompt
+    changes_text = "\n".join(f"- {item}" for item in changes)
+    prompt = (
+        "You are an IT assistant. Explain the nature of the following Microsoft Entra ID configuration changes:\n"
+        f"{changes_text}\n"
+        "For each change, provide the possible reason for the change, its potential impact, and any recommended actions."
+    )
     try:
-        response = client.chat.completions.create(
+        # Use ChatGPT model to get the explanation
+        response = openai.ChatCompletion.create(
             model=OPENAI_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=100
+            max_tokens=500,
+            temperature=0.2
         )
-        explanation = response.choices[0].message.content.strip()
-        print(f"[OpenAI] Successfully received explanation: {explanation}")
+        # Extract the response text
+        explanation = response['choices'][0]['message']['content'].strip()
         return explanation
     except Exception as e:
-        print(f"[OpenAI] Failed to get explanation from OpenAI. Error: {e}")
-        return "שגיאה בעת יצירת ניתוח השינויים על ידי GPT."
+        # In case of an error with the API, log it and return a basic explanation
+        error_msg = f"(GPT explanation failed: {e})"
+        print(error_msg)
+        return error_msg

@@ -1,16 +1,18 @@
-# frontend/Dockerfile (Correct, Production-Ready Version)
-
-# --- שלב 1: בניית אפליקציית ה-React ---
-FROM node:18-alpine AS builder
+# frontend/Dockerfile
+FROM node:18-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
 
-# --- שלב 2: הגשת האפליקציה עם Nginx ---
-FROM nginx:stable-alpine
-COPY --from=builder /app/build /usr/share/nginx/html
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf
+# Copy dependency definitions and install
+COPY package.json package-lock.json ./
+RUN npm install
+
+# Copy the rest of the application code
+COPY . .
+
+# Configure the React development server to listen on all interfaces and port 80
+ENV HOST=0.0.0.0
+ENV PORT=80
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+# Start the React development server
+CMD ["npm", "start"]

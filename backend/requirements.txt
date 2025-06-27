@@ -1,15 +1,8 @@
-# Flask
-Flask
-python-dotenv
-Flask-Cors
-gunicorn
-
-# Microsoft Graph
-msal
+# backend/requirements.txt
+flask
+flask-cors
+apscheduler
 requests
-
-# OpenAI
-openai
-
-# Scheduler
-APScheduler
+msal                   # Added for Microsoft Entra ID (MS Graph) authentication
+openai                 # Added for GPT API integration
+gunicorn 

@@ -1,86 +1,83 @@
-# ===================================================================
-# FILENAME: monitor.py
-# Description: The core logic for checking and comparing configurations.
-# UPDATED: Imports fixed, error handling improved.
-# ===================================================================
-from datetime import datetime
+# backend/monitor.py
 import json
-from backend.graph_client import fetch_current_config
-from backend.db import get_latest_snapshot, save_snapshot
-from backend.openai_client import get_change_explanation
+import sqlite3
+from datetime import datetime
 
-def diff_policies(old_policies, new_policies):
-    """
-    Compares two lists of policy objects and identifies what changed.
-    Returns a list of human-readable changes.
-    """
-    if old_policies is None:
-        # This handles the very first run when the database is empty.
-        return ["Initial configuration of Conditional Access Policies captured."]
+from graph_client import get_current_config
+from openai_client import get_explanation
+from config import GRAPH_TENANT_ID
 
-    # Handle cases where API might return non-list types
-    if not isinstance(old_policies, list) or not isinstance(new_policies, list):
-        print("[Monitor] Error: old_policies or new_policies is not a list. Cannot compare.")
-        return []
+# Path to the SQLite database file (same as used in db.py)
+DB_PATH = 'monitor_data.db'  # This matches DEFAULT_DB_PATH in db.py
 
+def _compute_diff(old_config, new_config):
+    """Compute differences between two configurations (lists of objects)."""
     changes = []
-    
-    try:
-        old_policies_map = {p['id']: p for p in old_policies}
-        new_policies_map = {p['id']: p for p in new_policies}
-    except (TypeError, KeyError) as e:
-        print(f"[Monitor] Warning: Could not create policy map due to unexpected data format: {e}. Aborting diff.")
-        return []
-
-    # Check for created or modified policies
-    for policy_id, new_policy in new_policies_map.items():
-        if policy_id not in old_policies_map:
-            changes.append(f"מדיניות נוצרה: '{new_policy.get('displayName', 'Unknown Name')}'")
+    # Index old and new configs by object ID (assuming each object has a unique 'id')
+    old_index = {obj.get('id'): obj for obj in (old_config or [])}
+    new_index = {obj.get('id'): obj for obj in (new_config or [])}
+    # Detect added or updated items
+    for obj_id, new_obj in new_index.items():
+        if obj_id not in old_index:
+            # New object added
+            name = new_obj.get('displayName') or new_obj.get('name') or obj_id
+            changes.append(f"Added object '{name}' (ID: {obj_id})")
         else:
-            old_policy = old_policies_map[policy_id]
-            # Simple comparison by converting to string. For deep comparison, use a dedicated library.
-            if json.dumps(old_policy, sort_keys=True) != json.dumps(new_policy, sort_keys=True):
-                changes.append(f"מדיניות עודכנה: '{new_policy.get('displayName', 'Unknown Name')}'")
-
-    # Check for deleted policies
-    for policy_id, old_policy in old_policies_map.items():
-        if policy_id not in new_policies_map:
-            changes.append(f"מדיניות נמחקה: '{old_policy.get('displayName', 'Unknown Name')}'")
-
+            # Check for modifications in existing object
+            old_obj = old_index[obj_id]
+            for key, new_val in new_obj.items():
+                if key == "id":
+                    continue  # Skip ID field
+                old_val = old_obj.get(key)
+                if old_val != new_val:
+                    name = new_obj.get('displayName') or new_obj.get('name') or obj_id
+                    changes.append(f"Updated '{key}' for object '{name}' (ID: {obj_id}): '{old_val}' -> '{new_val}'")
+    # Detect removed items
+    for obj_id, old_obj in old_index.items():
+        if obj_id not in new_index:
+            name = old_obj.get('displayName') or old_obj.get('name') or obj_id
+            changes.append(f"Removed object '{name}' (ID: {obj_id})")
     return changes
 
 def check_for_changes():
-    """
-    The main function executed by the scheduler to check for policy changes.
-    """
-    print("\n[Monitor] Starting check for configuration changes...")
-    
-    old_config = get_latest_snapshot()
-    new_config = fetch_current_config()
+    """Retrieve current config, compare with last snapshot, and save changes if any."""
+    try:
+        # Fetch the latest saved snapshot from the database
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute("SELECT config FROM snapshots ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        previous_config = json.loads(row["config"]) if row and row["config"] else None
 
-    if new_config is None:
-        print("[Monitor] Failed to fetch new configuration. Aborting check.")
-        return
+        # Get current configuration from Microsoft Graph
+        current_config = get_current_config()
 
-    # This is a critical check. If the configs are identical, do nothing.
-    if old_config is not None and json.dumps(old_config, sort_keys=True) == json.dumps(new_config, sort_keys=True):
-        print("[Monitor] No changes detected in Conditional Access Policies.")
-        return
-        
-    changes = diff_policies(old_config, new_config)
-    
-    if not changes:
-        if old_config is not None:
-             print("[Monitor] No logical changes detected despite different object representation.")
+        # Determine changes
+        if previous_config is None:
+            changes = ["Initial snapshot of configuration"]  # First time
         else:
-             print("[Monitor] This is the first run, capturing initial state.")
-             changes.append("Initial configuration of Conditional Access Policies captured.")
-        # Do not return here, we want to save the first snapshot.
-    
-    print(f"[Monitor] Detected {len(changes)} change(s). Generating explanation...")
-    explanation = get_change_explanation(changes)
-    
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    # Save the full new configuration for the next comparison
-    save_snapshot(timestamp, new_config, changes, explanation)
-    print("[Monitor] Finished check and saved new snapshot.")
+            changes = _compute_diff(previous_config, current_config)
+
+        if previous_config is None or changes:
+            # Generate explanation for changes (if any changes beyond initial snapshot note)
+            explanation = ""
+            if changes and not (len(changes) == 1 and changes[0].startswith("Initial snapshot")):
+                explanation = get_explanation(changes)
+            # Save new snapshot in the database
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+            conn.execute(
+                "INSERT INTO snapshots (timestamp, config, changes, explanation) VALUES (?, ?, ?, ?)",
+                (timestamp, json.dumps(current_config), json.dumps(changes), explanation)
+            )
+            conn.commit()
+            print(f"[{timestamp}] Configuration snapshot saved. Changes detected: {len(changes)} changes.")
+        else:
+            # No changes found; do nothing (no new snapshot)
+            print("No configuration changes detected. No new snapshot saved.")
+    except Exception as e:
+        print(f"Error during change detection: {e}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass

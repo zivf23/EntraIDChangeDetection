@@ -2,42 +2,30 @@
 import os
 import sys
 
+# The fixed path inside the image where secrets are placed
 SECRET_PATH_IN_IMAGE = '/app/secrets'
 
 def get_secret(secret_name):
+    """Read a secret value from the mounted secrets directory in the container."""
     secret_path = os.path.join(SECRET_PATH_IN_IMAGE, secret_name)
     try:
         with open(secret_path, 'r') as secret_file:
             return secret_file.read().strip()
     except IOError:
         print(f"!!! FATAL ERROR: Secret '{secret_name}' not found at {secret_path}. Build process may have failed.", file=sys.stderr)
-        return None # Return None to be checked later
+        sys.exit(1)
 
-# Load secrets
+# Load sensitive credentials from files
 GRAPH_CLIENT_ID = get_secret('graph_client_id')
 GRAPH_TENANT_ID = get_secret('graph_tenant_id')
 GRAPH_CLIENT_SECRET = get_secret('graph_client_secret')
 OPENAI_API_KEY = get_secret('openai_api_key')
 
-# Load non-secrets from .env file
-GRAPH_SCOPE = os.environ.get("GRAPH_SCOPE")
-GRAPH_CONFIG_ENDPOINT = os.environ.get("GRAPH_CONFIG_ENDPOINT")
+# Load non-sensitive config from environment (populated via .env)
+GRAPH_SCOPE = os.environ.get("GRAPH_SCOPE", "https://graph.microsoft.com/.default")
+GRAPH_CONFIG_ENDPOINT = os.environ.get("GRAPH_CONFIG_ENDPOINT", "https://graph.microsoft.com/v1.0")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
+# Default interval (in minutes) to check for changes, can be overridden by env
+CHECK_INTERVAL_MINUTES = int(os.environ.get("CHECK_INTERVAL_MINUTES", "10"))
 
-# Central validation function
-def validate_config():
-    required_vars = {
-        'GRAPH_CLIENT_ID': GRAPH_CLIENT_ID,
-        'GRAPH_TENANT_ID': GRAPH_TENANT_ID,
-        'GRAPH_CLIENT_SECRET': GRAPH_CLIENT_SECRET,
-        'OPENAI_API_KEY': OPENAI_API_KEY,
-        'GRAPH_SCOPE': GRAPH_SCOPE,
-        'GRAPH_CONFIG_ENDPOINT': GRAPH_CONFIG_ENDPOINT
-    }
-    
-    missing_vars = [name for name, value in required_vars.items() if not value]
-    
-    if missing_vars:
-        print(f"!!! FATAL ERROR: Missing required configuration: {missing_vars}")
-        sys.exit(1)
-    
-    print("--- Configuration and Secrets loaded successfully! ---")
+print("--- Configuration and Secrets Loaded Successfully! ---")
