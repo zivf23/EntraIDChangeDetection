@@ -1,5 +1,4 @@
-# backend/Dockerfile (Final Corrected Version)
-
+# backend/Dockerfile (Final Corrected Version for Python)
 #syntax=docker/dockerfile:1.4
 
 # --- שלב 1: התקנת תלויות ---
@@ -8,28 +7,23 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- שלב 2: בניית האפליקציה הסופית ---
+# --- שלב 2: בניית האימג' הסופי ---
 FROM python:3.11-slim
 WORKDIR /app
 
-# העתקת התלויות המוכנות
+# ⭐️ התיקון הקריטי: העתקת גם הספריות וגם קבצי ההרצה מהשלב הקודם ⭐️
 COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=dependencies /usr/local/bin /usr/local/bin
 
-# העתקת קוד המקור
+# העתקת קוד המקור של האפליקציה
 COPY . .
 
-# הוספת ספריית העבודה לנתיב של פייתון
-ENV PYTHONPATH "${PYTHONPATH}:/app"
-
-# הזרקת סודות בזמן ה-build
+# הזרקת סודות בזמן ה-build (זה נשאר כפי שהיה)
 RUN --mount=type=secret,id=graph_client_id,dst=/tmp/graph_client_id \
     --mount=type=secret,id=graph_tenant_id,dst=/tmp/graph_tenant_id \
     --mount=type=secret,id=graph_client_secret,dst=/tmp/graph_client_secret \
     --mount=type=secret,id=openai_api_key,dst=/tmp/openai_api_key \
-    # ניצור את תיקיית הסודות הסופית
     mkdir -p /app/secrets && \
-    # נעתיק כל קובץ בנפרד תוך שמירה על השם המקורי
     cp /tmp/graph_client_id /app/secrets/graph_client_id && \
     cp /tmp/graph_tenant_id /app/secrets/graph_tenant_id && \
     cp /tmp/graph_client_secret /app/secrets/graph_client_secret && \

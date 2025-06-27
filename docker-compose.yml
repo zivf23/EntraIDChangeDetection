@@ -1,53 +1,10 @@
-# services:
-#   backend:
-#     build:
-#       context: ./backend
-#       dockerfile: Dockerfile
-#       # ⭐️ התיקון הקריטי: אנחנו מגדירים את הסודות כאן, בשלב ה-build
-#       secrets:
-#         - graph_tenant_id
-#         - graph_client_id
-#         - graph_client_secret
-#         - openai_api_key
-#     ports:
-#       - "5000:5000"
-#     volumes:
-#       - ./backend:/app/backend # שיניתי את הנתיב ל-/app/backend כדי שיתאים ל-Dockerfile החדש
-    
-#     # env_file עדיין נחוץ עבור משתנים לא סודיים
-#     env_file:
-#       - ./.env
-    
-#     # ❌ מחקנו את בלוק ה-secrets: שהיה כאן תחת השירות
-
-#     command: gunicorn --bind 0.0.0.0:5000 --workers 1 --reload --log-level=debug "backend.app:app"
-
-#   frontend:
-#     build:
-#       context: ./frontend
-#       dockerfile: Dockerfile
-#     ports:
-#       - "3000:80"
-#     volumes:
-#       - ./frontend:/app
-#       - /app/node_modules
-#     environment:
-#       - WATCHPACK_POLLING=true
-#     depends_on:
-#       - backend
-
-# networks:
-#   default:
-#     name: entra-monitor-dev-network
-
-# # בלוק הסודות הראשי נשאר זהה, וממשיך להשתמש במשתנה הסביבה שלך
-
+# docker-compose.yml (Final Corrected Version)
+# docker-compose.yml (Final Corrected Version)
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      # הסודות מוגדרים כאן, עבור שלב ה-build
       secrets:
         - graph_tenant_id
         - graph_client_id
@@ -56,10 +13,11 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./backend:/app
+       - ./backend:/code/backend
     env_file:
       - ./.env
     command: gunicorn --bind 0.0.0.0:5000 --workers 1 --reload --log-level=debug "app:app"
+
   frontend:
     build:
       context: ./frontend
@@ -67,7 +25,7 @@ services:
     ports:
       - "3000:80"
     volumes:
-      - ./frontend/src:/app/src # שיפור: העלאת שינויי קוד חיים רק ל-src
+      - ./frontend/src:/app/src
     environment:
       - WATCHPACK_POLLING=true
     depends_on:
@@ -77,13 +35,12 @@ networks:
   default:
     name: entra-monitor-dev-network
 
-# בלוק הסודות הראשי נשאר זהה, וממשיך להשתמש במשתנה הסביבה שלך
 secrets:
   graph_tenant_id:
-    file: ${SECRETS_DIR}/graph_tenant_id.txt
+    file: ${SECRETS_DIR}\graph_tenant_id.txt
   graph_client_id:
-    file: ${SECRETS_DIR}/graph_client_id.txt
+    file: ${SECRETS_DIR}\graph_client_id.txt
   graph_client_secret:
-    file: ${SECRETS_DIR}/graph_client_secret.txt
+    file: ${SECRETS_DIR}\graph_client_secret.txt
   openai_api_key:
-    file: ${SECRETS_DIR}/openai_api_key.txt
+    file: ${SECRETS_DIR}\openai_api_key.txt
