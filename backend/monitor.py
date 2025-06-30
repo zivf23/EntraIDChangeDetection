@@ -1,83 +1,109 @@
-# backend/monitor.py
+### backend/monitor.py (Fixed database operations)
+
+"""
+Configuration monitoring module - detects changes and triggers explanations.
+"""
+
 import json
 import sqlite3
+import logging
 from datetime import datetime
-
 from graph_client import get_current_config
 from openai_client import get_explanation
-from config import GRAPH_TENANT_ID
+from config import DATABASE_PATH
 
-# Path to the SQLite database file (same as used in db.py)
-DB_PATH = 'monitor_data.db'  # This matches DEFAULT_DB_PATH in db.py
+logger = logging.getLogger(__name__)
 
 def _compute_diff(old_config, new_config):
-    """Compute differences between two configurations (lists of objects)."""
+    """
+    Compute differences between two configurations.
+    
+    Args:
+        old_config: Previous configuration (list of objects)
+        new_config: Current configuration (list of objects)
+        
+    Returns:
+        list: List of change descriptions
+    """
     changes = []
-    # Index old and new configs by object ID (assuming each object has a unique 'id')
+    
+    # Index configs by ID
     old_index = {obj.get('id'): obj for obj in (old_config or [])}
     new_index = {obj.get('id'): obj for obj in (new_config or [])}
-    # Detect added or updated items
-    for obj_id, new_obj in new_index.items():
+    
+    # Find added items
+    for obj_id, obj in new_index.items():
         if obj_id not in old_index:
-            # New object added
-            name = new_obj.get('displayName') or new_obj.get('name') or obj_id
-            changes.append(f"Added object '{name}' (ID: {obj_id})")
-        else:
-            # Check for modifications in existing object
-            old_obj = old_index[obj_id]
-            for key, new_val in new_obj.items():
-                if key == "id":
-                    continue  # Skip ID field
-                old_val = old_obj.get(key)
-                if old_val != new_val:
-                    name = new_obj.get('displayName') or new_obj.get('name') or obj_id
-                    changes.append(f"Updated '{key}' for object '{name}' (ID: {obj_id}): '{old_val}' -> '{new_val}'")
-    # Detect removed items
-    for obj_id, old_obj in old_index.items():
+            name = obj.get('displayName') or obj.get('userPrincipalName') or obj_id
+            changes.append(f"User added: {name}")
+    
+    # Find removed items
+    for obj_id, obj in old_index.items():
         if obj_id not in new_index:
-            name = old_obj.get('displayName') or old_obj.get('name') or obj_id
-            changes.append(f"Removed object '{name}' (ID: {obj_id})")
+            name = obj.get('displayName') or obj.get('userPrincipalName') or obj_id
+            changes.append(f"User removed: {name}")
+    
+    # Find modified items
+    for obj_id in set(old_index) & set(new_index):
+        old_obj = old_index[obj_id]
+        new_obj = new_index[obj_id]
+        
+        # Check important fields
+        for key in ['displayName', 'userPrincipalName', 'accountEnabled', 'jobTitle']:
+            old_val = old_obj.get(key)
+            new_val = new_obj.get(key)
+            if old_val != new_val:
+                name = new_obj.get('displayName') or new_obj.get('userPrincipalName') or obj_id
+                changes.append(f"User modified: {name} - {key} changed from '{old_val}' to '{new_val}'")
+    
     return changes
 
 def check_for_changes():
-    """Retrieve current config, compare with last snapshot, and save changes if any."""
+    """Check for configuration changes and save snapshot if changes detected."""
+    conn = None
     try:
-        # Fetch the latest saved snapshot from the database
-        conn = sqlite3.connect(DB_PATH)
+        logger.info("Starting configuration check")
+        
+        # Get current configuration
+        current_config = get_current_config()
+        
+        # Connect to database
+        conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
+        
+        # Get previous configuration
         cur = conn.execute("SELECT config FROM snapshots ORDER BY id DESC LIMIT 1")
         row = cur.fetchone()
-        previous_config = json.loads(row["config"]) if row and row["config"] else None
-
-        # Get current configuration from Microsoft Graph
-        current_config = get_current_config()
-
+        previous_config = json.loads(row["config"]) if row else None
+        
         # Determine changes
         if previous_config is None:
-            changes = ["Initial snapshot of configuration"]  # First time
+            changes = ["Initial configuration snapshot"]
+            logger.info("Creating initial configuration snapshot")
         else:
             changes = _compute_diff(previous_config, current_config)
-
-        if previous_config is None or changes:
-            # Generate explanation for changes (if any changes beyond initial snapshot note)
+            logger.info(f"Found {len(changes)} changes")
+        
+        # Save snapshot if there are changes
+        if changes:
+            # Generate explanation for significant changes
             explanation = ""
-            if changes and not (len(changes) == 1 and changes[0].startswith("Initial snapshot")):
+            if len(changes) > 1 or (len(changes) == 1 and not changes[0].startswith("Initial")):
                 explanation = get_explanation(changes)
-            # Save new snapshot in the database
+            
+            # Save to database
             timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
             conn.execute(
                 "INSERT INTO snapshots (timestamp, config, changes, explanation) VALUES (?, ?, ?, ?)",
                 (timestamp, json.dumps(current_config), json.dumps(changes), explanation)
             )
             conn.commit()
-            print(f"[{timestamp}] Configuration snapshot saved. Changes detected: {len(changes)} changes.")
+            logger.info(f"Saved snapshot at {timestamp} with {len(changes)} changes")
         else:
-            # No changes found; do nothing (no new snapshot)
-            print("No configuration changes detected. No new snapshot saved.")
+            logger.info("No changes detected - snapshot not saved")
+            
     except Exception as e:
-        print(f"Error during change detection: {e}")
+        logger.error(f"Error during configuration check: {e}", exc_info=True)
     finally:
-        try:
+        if conn:
             conn.close()
-        except Exception:
-            pass

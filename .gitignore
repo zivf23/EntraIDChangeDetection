@@ -1,37 +1,88 @@
-# ===================================================================
-# FILENAME: .gitignore
-# PURPOSE: מניעת העלאת קבצים לא רצויים ל-Git.
-# ===================================================================
+# Secrets - NEVER commit these!
+secrets/
+*.pem
+*.key
+*.cert
+*.pfx
+
+# Environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
-env/
 venv/
-*.egg-info/
-dist/
-build/
+env/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
 
 # Database
-monitor_data.db
+*.db
+*.sqlite
 *.sqlite3
+monitor_data.db
 
-# Node / Frontend
-node_modules/
-build/
-.DS_Store
-coverage/
-
-# IDE / Editor
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.swn
+.project
+.classpath
+.settings/
 
-# Environment variables
-.env
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-secrets/
+# Build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+logs/
+*.log
+log/
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Data directory
+data/

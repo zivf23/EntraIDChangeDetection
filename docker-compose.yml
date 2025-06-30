@@ -1,37 +1,41 @@
 # docker-compose.yml
+version: "3.9"
+
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      secrets:
-        - graph_tenant_id
-        - graph_client_id
-        - graph_client_secret
-        - openai_api_key
     ports:
       - "5000:5000"
     volumes:
-      - ./backend:/app
+      - ./backend:/app                # hot-reload בפיתוח
     env_file:
-      - ./.env
-    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --reload --log-level=debug app:app
+      - ./.env                        # משתני סביבה לא-סודיים (למשל CHECK_INTERVAL_MINUTES)
+    secrets:                          # ⬅️ mount בזמן הריצה בלבד
+      - graph_tenant_id
+      - graph_client_id
+      - graph_client_secret
+      - openai_api_key
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3000:80"                     # React dev server → host:3000
     volumes:
       - ./frontend/src:/app/src
     environment:
-      - WATCHPACK_POLLING=true
+      - WATCHPACK_POLLING=true        # hot-reload בתוך WSL2 / Docker Desktop
     depends_on:
       - backend
+
 networks:
   default:
     name: entra-monitor-dev-network
-secrets:
+
+secrets:                              # קבצי TXT מחוץ לריפו – ראו הסעיף -3
   graph_tenant_id:
     file: ${SECRETS_DIR}/graph_tenant_id.txt
   graph_client_id:

@@ -1,0 +1,143 @@
+/* ===================================================================
+ * FILENAME: src/style.css
+ * PURPOSE: עיצוב גלובלי וקלאסים של TailwindCSS.
+ * =================================================================== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-900 text-slate-200 antialiased;
+  direction: rtl;
+}
+
+/* רכיב פנל כללי */
+@layer components {
+  .panel {
+    @apply bg-slate-800/60 border border-slate-700 rounded-xl shadow-lg backdrop-blur-sm;
+  }
+}
+
+/* עיצובים נוספים לקומפוננטות */
+.timeline-item.selected {
+  @apply bg-cyan-500/10 text-cyan-300;
+}
+
+.timeline-item:not(.selected):hover {
+    @apply bg-slate-700/50;
+}
+
+.fade-in {
+  animation: fadeInAnimation ease 0.5s;
+  animation-fill-mode: forwards;
+}
+
+@keyframes fadeInAnimation {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* הגדרות ספציפיות לעורך Monaco כדי לוודא שאין גלילה אופקית */
+.monaco-editor .view-lines {
+    overflow-x: hidden !important;
+}
+
+
+/* Modal Styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.modal-content {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 1400px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #334155;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.modal-subtitle {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.modal-close:hover {
+  color: #f1f5f9;
+}
+
+.modal-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #334155;
+}
+
+.toast-notification {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #6366f1;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 2rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

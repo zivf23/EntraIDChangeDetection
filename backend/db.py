@@ -1,27 +1,30 @@
-# backend/db.py
+### backend/db.py (Fixed imports)
+```python
+"""
+Database module for storing configuration snapshots and changes.
+"""
+
 import sqlite3
 import json
+from datetime import datetime
 from flask import current_app, g
-
-# Default path for the SQLite database file
-DEFAULT_DB_PATH = 'monitor_data.db'
+from config import DATABASE_PATH
 
 def get_db():
-    """Open a new database connection for the current application context, or use an existing one."""
-    db_path = current_app.config.get('DATABASE', DEFAULT_DB_PATH) if current_app else DEFAULT_DB_PATH
+    """Get database connection for current request."""
     if 'db' not in g:
-        g.db = sqlite3.connect(db_path)
+        g.db = sqlite3.connect(DATABASE_PATH)
         g.db.row_factory = sqlite3.Row
     return g.db
 
 def close_db(e=None):
-    """Close the database connection at the end of request."""
+    """Close database connection."""
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
 def init_db():
-    """Initialize the database by creating the snapshots table if it doesn't exist."""
+    """Initialize database schema."""
     db = get_db()
     db.execute("""
         CREATE TABLE IF NOT EXISTS snapshots (
@@ -35,31 +38,36 @@ def init_db():
     db.commit()
 
 def init_app(app):
-    """Register database functions with the Flask app."""
+    """Register database functions with Flask app."""
     app.teardown_appcontext(close_db)
     with app.app_context():
         init_db()
 
 def get_all_snapshots():
-    """Retrieve a list of all snapshots (id and timestamp) for overview."""
+    """Retrieve all snapshots (id and timestamp only)."""
     db = get_db()
     rows = db.execute("SELECT id, timestamp FROM snapshots ORDER BY timestamp DESC").fetchall()
     return [{"id": row["id"], "timestamp": row["timestamp"]} for row in rows]
 
 def get_snapshot_details(snap_id):
-    """Retrieve full details of a specific snapshot, including the previous config for diff."""
+    """Retrieve full details of a specific snapshot."""
     db = get_db()
     current = db.execute("SELECT * FROM snapshots WHERE id=?", (snap_id,)).fetchone()
     if not current:
         return None
+    
     # Load JSON fields
     current_config = json.loads(current["config"])
     changes = json.loads(current["changes"]) if current["changes"] else []
     explanation = current["explanation"]
-    # Try to get previous snapshot's config for comparison
-    prev = db.execute("SELECT config FROM snapshots WHERE id < ? ORDER BY id DESC LIMIT 1", (snap_id,)).fetchone()
-    previous_config = json.loads(prev["config"]) if prev and prev["config"] else None
-    # Build the detail response
+    
+    # Get previous snapshot for comparison
+    prev = db.execute(
+        "SELECT config FROM snapshots WHERE id < ? ORDER BY id DESC LIMIT 1", 
+        (snap_id,)
+    ).fetchone()
+    previous_config = json.loads(prev["config"]) if prev else None
+    
     return {
         "timestamp": current["timestamp"],
         "current_config": current_config,
@@ -67,3 +75,14 @@ def get_snapshot_details(snap_id):
         "changes": changes,
         "explanation": explanation
     }
+
+def save_snapshot(config, changes, explanation):
+    """Save a new configuration snapshot."""
+    db = get_db()
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
+    db.execute(
+        "INSERT INTO snapshots (timestamp, config, changes, explanation) VALUES (?, ?, ?, ?)",
+        (timestamp, json.dumps(config), json.dumps(changes), explanation)
+    )
+    db.commit()
+    return timestamp
