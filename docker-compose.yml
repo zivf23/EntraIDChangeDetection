@@ -1,41 +1,75 @@
-# docker-compose.yml
-version: "3.9"
+# ===================================================================
+# FILE: docker-compose.yml (FOR DEVELOPMENT)
+# PURPOSE: Runs the entire application stack (backend & frontend)
+# in a development environment with hot-reloading.
+# ===================================================================
 
 services:
+  # ====================
+  # The Backend Service
+  # ====================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # ✅ FIX: Ensure PYTHONPATH is correct at runtime!
+    command: >
+      /bin/sh -c "PYTHONPATH=/app:/app/deps python app.py"
     ports:
       - "5000:5000"
     volumes:
-      - ./backend:/app                # hot-reload בפיתוח
+      - ./backend:/app
+      - /app/deps
     env_file:
-      - ./.env                        # משתני סביבה לא-סודיים (למשל CHECK_INTERVAL_MINUTES)
-    secrets:                          # ⬅️ mount בזמן הריצה בלבד
+      - .env
+    secrets:
+      - flask_secret_key
       - graph_tenant_id
       - graph_client_id
       - graph_client_secret
       - openai_api_key
+      - admin_user
+      - admin_pass
+    networks:
+      - entra-monitor-network
+    # Optional: restart policy for dev
+    restart: unless-stopped
 
+  # ====================
+  # The Frontend Service
+  # ====================
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
+    command: npm start
     ports:
-      - "3000:80"                     # React dev server → host:3000
+      - "3000:3000"
     volumes:
-      - ./frontend/src:/app/src
+      - ./frontend:/app
+      - /app/node_modules
     environment:
-      - WATCHPACK_POLLING=true        # hot-reload בתוך WSL2 / Docker Desktop
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_PORT=3000
+    networks:
+      - entra-monitor-network
     depends_on:
       - backend
+    restart: unless-stopped
 
+# ====================
+# Network definition
+# ====================
 networks:
-  default:
+  entra-monitor-network:
     name: entra-monitor-dev-network
 
-secrets:                              # קבצי TXT מחוץ לריפו – ראו הסעיף -3
+# ====================
+# Secrets definitions
+# ====================
+secrets:
+  flask_secret_key:
+    file: ${SECRETS_DIR}/flask_secret_key.txt
   graph_tenant_id:
     file: ${SECRETS_DIR}/graph_tenant_id.txt
   graph_client_id:
@@ -44,3 +78,7 @@ secrets:                              # קבצי TXT מחוץ לריפו – ר�
     file: ${SECRETS_DIR}/graph_client_secret.txt
   openai_api_key:
     file: ${SECRETS_DIR}/openai_api_key.txt
+  admin_user:
+    file: ${SECRETS_DIR}/admin_user.txt
+  admin_pass:
+    file: ${SECRETS_DIR}/admin_pass.txt

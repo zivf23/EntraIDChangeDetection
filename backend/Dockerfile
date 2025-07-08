@@ -1,15 +1,42 @@
+# ===================================================================
+# STAGE 1: The "Builder" Stage
+# ===================================================================
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install dependencies into a specific, non-user directory
+# This prevents them from being overwritten by the volume mount.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt -t /app/deps
+
+# Copy the rest of the application source code
+COPY . .
+
+
+# ===================================================================
+# STAGE 2: The "Final" Stage
+# ===================================================================
 FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a non-root user
+RUN addgroup --system app && adduser --system --group app
 
-COPY . .
+# --- FIX: Copy dependencies to a location that won't be overwritten by volumes ---
+COPY --from=builder /app/deps /app/deps
+COPY --from=builder /app /app
 
-ENV PYTHONPATH="/app:${PYTHONPATH}"
+RUN chown -R app:app /app
+
+USER app
+
+# --- FIX: Add the dependencies directory to PYTHONPATH ---
+# This tells Python where to find the installed packages.
+ENV PYTHONPATH="/app:/app/deps"
 ENV DOCKER_CONTAINER=1
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--log-level=info", "app:app"]
+# The command will be provided by docker-compose, so no CMD is needed here.

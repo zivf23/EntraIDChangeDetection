@@ -4,62 +4,50 @@ Configuration module for EntraID Change Detection System.
 Supports Docker secrets for secure credential management.
 """
 
-import os
-import sys
-from pathlib import Path
+import os # for environment variables and file operations
+import sys  # for error handling and exit
+from pathlib import Path # for file path management
 
-# Detect execution environment
+# Detect execution environment - whether in Docker or local development
 IS_DOCKER = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER', False)
 
 def _read_secret(name, required=True):
     """
     Read a secret value from Docker secrets or local files.
-    
-    Args:
-        name: Secret name (e.g., 'graph_client_id')
-        required: If True, exit if secret not found
-        
-    Returns:
-        str: Secret value (stripped of whitespace)
     """
-    # Docker secrets path
+    # Docker path
     docker_path = f'/run/secrets/{name}'
-    
+
     # Local development path
     local_path = Path(__file__).parent.parent / 'secrets' / f'{name}.txt'
-    
-    # Try Docker secrets first (production)
-    if os.path.exists(docker_path):
-        try:
-            with open(docker_path, 'r') as f:
-                value = f.read().strip()
-                if value:
-                    return value
-        except Exception as e:
-            print(f"Error reading Docker secret {name}: {e}", file=sys.stderr)
-    
-    # Try local secrets (development)
-    if local_path.exists():
-        try:
-            with open(local_path, 'r') as f:
-                value = f.read().strip()
-                if value:
-                    return value
-        except Exception as e:
-            print(f"Error reading local secret {name}: {e}", file=sys.stderr)
-    
-    # Try environment variable as last resort
+
+    # Try Docker first
+    if os.path.isfile(docker_path):
+        with open(docker_path) as f:
+            return f.read().strip()
+
+    # Try local file
+    if local_path.is_file():
+        with open(local_path) as f:
+            return f.read().strip()
+
+    # Try env var
     env_value = os.environ.get(name.upper())
     if env_value:
         return env_value
-    
-    # Handle missing secret
+
+    # Handle missing
     if required:
-        print(f"\nERROR: Required secret '{name}' not found!", file=sys.stderr)
-        print(f"Please create: secrets/{name}.txt", file=sys.stderr)
+        if IS_DOCKER:
+            print(f"\nERROR: Required Docker secret '{name}' not found!", file=sys.stderr)
+            print(f"Please ensure you mounted it correctly in your compose file.", file=sys.stderr)
+        else:
+            print(f"\nERROR: Required local secret '{name}.txt' not found!", file=sys.stderr)
+            print(f"Please create: secrets/{name}.txt", file=sys.stderr)
         sys.exit(1)
-    
+
     return None
+
 
 # Load required secrets
 print("Loading secure configuration...")
@@ -67,6 +55,7 @@ GRAPH_CLIENT_ID = _read_secret('graph_client_id')
 GRAPH_TENANT_ID = _read_secret('graph_tenant_id')
 GRAPH_CLIENT_SECRET = _read_secret('graph_client_secret')
 OPENAI_API_KEY = _read_secret('openai_api_key')
+FLASK_SECRET_KEY = _read_secret('flask_secret_key')
 
 # Optional secrets with defaults
 ADMIN_USER = _read_secret('admin_user', required=False) or os.environ.get('ADMIN_USER', 'admin')

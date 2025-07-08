@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "worker-loader": "^3.0.8"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.52.2"
+  }
+}

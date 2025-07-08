@@ -1,251 +1,156 @@
 /**
  * API Client for EntraID Change Detection System
- * 
- * This module handles all communication with the backend API including:
- * - Authentication
- * - Error handling
- * - Request/response formatting
- * 
- * Configuration is provided via environment variables at build time.
+ * -- Updated for session-based (cookie) authentication --
  */
 
-// Get configuration from environment or use defaults
-// Note: process.env values are replaced at build time by React
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
-const ADMIN_USER = process.env.REACT_APP_ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.REACT_APP_ADMIN_PASS || 'admin';
-
-// Create base64 encoded auth header
-const authHeader = 'Basic ' + btoa(`${ADMIN_USER}:${ADMIN_PASS}`);
-
-// Default headers for all API requests
-const defaultHeaders = {
-  'Authorization': authHeader,
-  'Content-Type': 'application/json',
-  'Accept': 'application/json'
-};
+// Use a relative URL for API requests. This works with the proxy in development
+// and is correct for production when frontend and backend are served from the same domain.
+const API_BASE_URL = ''; 
 
 /**
  * Custom error class for API errors
  */
 class ApiError extends Error {
-  constructor(message, status, response, details = {}) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.response = response;
-    this.details = details;
-  }
+    constructor(message, status, response, details = {}) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.response = response;
+        this.details = details;
+    }
 }
 
 /**
- * Generic API request handler with comprehensive error handling
- * 
- * @param {string} path - API endpoint path (e.g., '/snapshots')
+ * Generic API request handler with comprehensive error handling.
+ * It now includes credentials (cookies) with every request.
+ * * @param {string} path - API endpoint path (e.g., '/snapshots')
  * @param {Object} options - Fetch options
+ * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the request
  * @returns {Promise<any>} - Parsed JSON response
  * @throws {ApiError} - On any API error
  */
-async function apiRequest(path, options = {}) {
-  const url = `${API_BASE_URL}/api${path}`;
-  
-  // Log request in development
-  if (process.env.NODE_ENV === 'development') {
-    console.debug(`API Request: ${options.method || 'GET'} ${url}`);
-  }
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers
-      }
-    });
-
-    // Handle successful responses
-    if (response.ok) {
-      const data = await response.json();
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('API Response:', data);
-      }
-      
-      return data;
+async function apiRequest(path, options = {}, signal) {
+    const url = `${API_BASE_URL}/api${path}`;
+    
+    if (process.env.NODE_ENV === 'development') {
+        console.debug(`API Request: ${options.method || 'GET'} ${url}`);
     }
-
-    // Handle error responses
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-    let errorDetails = {};
     
     try {
-      // Try to parse error response as JSON
-      const errorData = await response.json();
-      errorMessage = errorData.message || errorMessage;
-      errorDetails = {
-        error: errorData.error,
-        details: errorData.details
-      };
-    } catch {
-      // If not JSON, try to get text
-      try {
-        const errorText = await response.text();
-        if (errorText) {
-          errorMessage = errorText;
+        const response = await fetch(url, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                ...options.headers,
+            },
+            // --- CHANGE: This tells the browser to send cookies with the request ---
+            credentials: 'include',
+            signal: signal, // Pass the abort signal to fetch
+        });
+
+        if (response.ok) {
+            // For 204 No Content, there's no body to parse
+            if (response.status === 204) {
+                return null;
+            }
+            const data = await response.json();
+            if (process.env.NODE_ENV === 'development') {
+                console.debug('API Response:', data);
+            }
+            return data;
         }
-      } catch {
-        // Use default error message
-      }
-    }
-    
-    // Special handling for common errors
-    if (response.status === 401) {
-      throw new ApiError(
-        'Authentication failed. Please check your credentials.',
-        response.status,
-        response,
-        errorDetails
-      );
-    } else if (response.status === 404) {
-      throw new ApiError(
-        'Resource not found',
-        response.status,
-        response,
-        errorDetails
-      );
-    } else if (response.status >= 500) {
-      throw new ApiError(
-        'Server error. Please try again later.',
-        response.status,
-        response,
-        errorDetails
-      );
-    }
-    
-    throw new ApiError(errorMessage, response.status, response, errorDetails);
-    
-  } catch (error) {
-    // Handle network errors
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    
-    // Connection refused or network error
-    if (error.message === 'Failed to fetch') {
-      throw new ApiError(
-        'Cannot connect to backend server. Please ensure the backend is running on port 5000.',
-        0,
-        null,
-        { 
-          originalError: error.message,
-          suggestion: 'Check if backend container is running: docker-compose ps'
+
+        // Handle error responses
+        let errorBody = {};
+        try {
+            errorBody = await response.json();
+        } catch { /* Ignore if response is not JSON */ }
+
+        const errorMessage = errorBody.message || `HTTP ${response.status}: ${response.statusText}`;
+        throw new ApiError(errorMessage, response.status, response, errorBody);
+        
+    } catch (error) {
+        if (error instanceof ApiError || error.name === 'AbortError') {
+            throw error;
         }
-      );
+        
+        if (error.message === 'Failed to fetch') {
+            throw new ApiError('Cannot connect to backend server.', 0);
+        }
+        
+        throw new ApiError(error.message || 'An unexpected error occurred', 0);
     }
-    
-    // Other unexpected errors
-    throw new ApiError(
-      error.message || 'An unexpected error occurred',
-      0,
-      null,
-      { originalError: error }
-    );
-  }
 }
 
 /**
  * API client with all available endpoints
  */
 export const Api = {
-  /**
-   * Get list of all snapshots
-   * @returns {Promise<Array>} Array of snapshot objects with id and timestamp
-   */
-  async getSnapshots() {
-    try {
-      return await apiRequest('/snapshots');
-    } catch (error) {
-      console.error('Failed to fetch snapshots:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Get detailed information about a specific snapshot
-   * @param {number} id - Snapshot ID
-   * @returns {Promise<Object>} Snapshot details including changes and explanations
-   */
-  async getSnapshot(id) {
-    if (!id && id !== 0) {
-      throw new Error('Snapshot ID is required');
-    }
+    /**
+     * --- NEW: Login function ---
+     * @param {string} username
+     * @param {string} password
+     * @returns {Promise<Object>} Login response message
+     */
+    async login(username, password) {
+        return apiRequest('/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password }),
+        });
+    },
+
+    /**
+     * --- NEW: Logout function ---
+     * @returns {Promise<Object>} Logout response message
+     */
+    async logout() {
+        return apiRequest('/logout', {
+            method: 'POST',
+        });
+    },
+
+    /**
+     * --- NEW: Check authentication status ---
+     * We check status by trying to access a protected route.
+     * @returns {Promise<{isLoggedIn: boolean, user: string | null}>}
+     */
+    async checkAuthStatus() {
+        try {
+            // The /snapshots endpoint is protected. If this succeeds, we are logged in.
+            // We only need the status, not the data, so we can abort it quickly if needed.
+            await apiRequest('/snapshots', { method: 'HEAD' }); // HEAD is lighter than GET
+            // Note: A more robust way would be a dedicated /api/me endpoint.
+            // For now, this is a simple and effective check.
+            return { isLoggedIn: true };
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 401) {
+                return { isLoggedIn: false };
+            }
+            // For other errors (e.g., server down), we also consider the user not logged in.
+            return { isLoggedIn: false };
+        }
+    },
+
+    /**
+     * Get list of all snapshots
+     */
+    async getSnapshots() {
+        return apiRequest('/snapshots');
+    },
     
-    try {
-      return await apiRequest(`/snapshots/${id}`);
-    } catch (error) {
-      console.error(`Failed to fetch snapshot ${id}:`, error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Health check endpoint
-   * @returns {Promise<Object>} Health status
-   */
-  async healthCheck() {
-    try {
-      return await apiRequest('/health');
-    } catch (error) {
-      console.error('Health check failed:', error);
-      throw error;
-    }
-  },
-  
-  /**
-   * Get API information (no auth required)
-   * Useful for debugging connection issues
-   * @returns {Promise<Object>} API information
-   */
-  async getInfo() {
-    try {
-      // Don't send auth header for info endpoint
-      const response = await fetch(`${API_BASE_URL}/api/info`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to get API info:', error);
-      throw new ApiError(
-        'Cannot reach API. Backend may not be running.',
-        0,
-        null,
-        { checkBackend: true }
-      );
-    }
-  }
+    /**
+     * Get detailed information about a specific snapshot
+     * @param {number} id - Snapshot ID
+     * @param {AbortSignal} signal - AbortSignal to cancel the request
+     */
+    async getSnapshot(id, signal) {
+        if (!id && id !== 0) {
+            throw new Error('Snapshot ID is required');
+        }
+        return apiRequest(`/snapshots/${id}`, {}, signal);
+    },
 };
 
 // Export error class for use in components
 export { ApiError };
-
-// For debugging in development
-if (process.env.NODE_ENV === 'development') {
-  window.DEBUG_API = {
-    API_BASE_URL,
-    ADMIN_USER,
-    testConnection: async () => {
-      try {
-        const info = await Api.getInfo();
-        console.log('API Info:', info);
-        const health = await Api.healthCheck();
-        console.log('Health Check:', health);
-        return { success: true, info, health };
-      } catch (error) {
-        console.error('Connection test failed:', error);
-        return { success: false, error };
-      }
-    }
-  };
-  console.log('API Debug available at window.DEBUG_API');
-}

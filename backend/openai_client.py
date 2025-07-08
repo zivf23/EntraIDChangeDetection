@@ -1,47 +1,40 @@
 """
 OpenAI integration module for generating explanations of Entra ID configuration changes.
-
-This module uses GPT to analyze configuration changes and provide:
-- Summary of what changed
-- Impact analysis
-- Security implications
-- Recommended actions
-
-The output is formatted as HTML for display in the web interface.
+This module is updated for openai library version >= 1.0.0.
 """
 
-import openai
 import logging
-from typing import List, Optional
-
+from typing import List
+# --- FIX: Changed 'InvalidRequestError' to 'BadRequestError' ---
+from openai import OpenAI, RateLimitError, AuthenticationError, BadRequestError
 from config import OPENAI_API_KEY, OPENAI_MODEL
-
-# Configure OpenAI client
-openai.api_key = OPENAI_API_KEY
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# Initialize the client
+client = None
+if OPENAI_API_KEY:
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {e}")
+else:
+    logger.warning("OPENAI_API_KEY is not set. AI explanations will be disabled.")
+
+
 def get_explanation(changes: List[str]) -> str:
     """
-    Generate an AI-powered explanation for configuration changes.
-    
-    This function sends the list of changes to OpenAI's GPT model and receives
-    a structured explanation formatted in HTML.
-    
-    Args:
-        changes: List of configuration changes detected
-        
-    Returns:
-        HTML-formatted explanation of the changes, or error message on failure
-        
-    Example:
-        >>> changes = ["Added user 'john@company.com'", "Modified MFA policy"]
-        >>> explanation = get_explanation(changes)
-        >>> print(explanation)
-        <h3>Summary</h3><p>Two configuration changes were detected...</p>
+    Generate an AI-powered explanation for configuration changes using the modern OpenAI client.
     """
-    # Return empty string if no changes
+    if not client:
+        return """
+        <div class="alert alert-secondary">
+            <h4>AI Service Not Configured</h4>
+            <p>The OpenAI API key is not configured. AI-powered explanations are currently disabled.</p>
+        </div>
+        """
+
     if not changes:
         logger.debug("No changes to explain")
         return ""
@@ -49,13 +42,12 @@ def get_explanation(changes: List[str]) -> str:
     # Limit the number of changes to prevent token overflow
     if len(changes) > 50:
         logger.warning(f"Too many changes ({len(changes)}), truncating to 50")
+        original_count = len(changes)
         changes = changes[:50]
-        changes.append(f"... and {len(changes) - 50} more changes")
+        changes.append(f"... and {original_count - 50} more changes")
     
-    # Format changes as a bulleted list
     changes_text = "\n".join(f"- {change}" for change in changes)
     
-    # Create a detailed prompt for GPT
     system_prompt = """You are a Microsoft Entra ID (Azure AD) security expert. 
     Format all responses in clean, semantic HTML without any markdown.
     Be concise but thorough in your analysis."""
@@ -96,73 +88,50 @@ Keep the total response under 500 words. Focus on actionable insights."""
     try:
         logger.info(f"Requesting GPT explanation for {len(changes)} changes")
         
-        # Make API call to OpenAI
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             max_tokens=1000,
-            temperature=0.3,  # Lower temperature for more consistent output
+            temperature=0.3,
             presence_penalty=0.1,
             frequency_penalty=0.1
         )
         
-        # Extract the explanation
-        explanation = response['choices'][0]['message']['content'].strip()
+        explanation = response.choices[0].message.content.strip()
         
-        # Validate HTML output
         if not explanation.startswith('<'):
-            # Wrap in paragraph if GPT didn't return HTML
             explanation = f"<p>{explanation}</p>"
         
-        # Log token usage for monitoring
-        usage = response.get('usage', {})
-        logger.info(f"GPT response received. Tokens used: {usage.get('total_tokens', 'N/A')}")
+        usage = response.usage
+        if usage:
+            logger.info(f"GPT response received. Tokens used: {usage.total_tokens}")
         
         return explanation
         
-    except openai.error.RateLimitError as e:
+    except RateLimitError as e:
         logger.error(f"OpenAI rate limit exceeded: {e}")
         return """
-        <div class="alert alert-warning">
-            <h4>Rate Limit Exceeded</h4>
-            <p>The AI service is temporarily unavailable due to rate limits. 
-            Please try again in a few moments.</p>
-        </div>
+        <div class="alert alert-warning"><h4>Rate Limit Exceeded</h4><p>The AI service is temporarily unavailable due to rate limits.</p></div>
         """
         
-    except openai.error.AuthenticationError as e:
+    except AuthenticationError as e:
         logger.error(f"OpenAI authentication failed: {e}")
         return """
-        <div class="alert alert-danger">
-            <h4>Authentication Error</h4>
-            <p>Unable to authenticate with the AI service. 
-            Please check your OpenAI API key configuration.</p>
-        </div>
+        <div class="alert alert-danger"><h4>Authentication Error</h4><p>Unable to authenticate with the AI service. Please check your API key.</p></div>
         """
         
-    except openai.error.InvalidRequestError as e:
+    # --- FIX: Changed 'InvalidRequestError' to 'BadRequestError' ---
+    except BadRequestError as e:
         logger.error(f"Invalid OpenAI request: {e}")
         return f"""
-        <div class="alert alert-danger">
-            <h4>Configuration Error</h4>
-            <p>The AI model '{OPENAI_MODEL}' may not be available. 
-            Error: {str(e)}</p>
-        </div>
+        <div class="alert alert-danger"><h4>Configuration Error</h4><p>The AI model '{OPENAI_MODEL}' may not be available. Error: {str(e)}</p></div>
         """
         
     except Exception as e:
         logger.error(f"Unexpected error in GPT explanation: {e}", exc_info=True)
         return f"""
-        <div class="alert alert-danger">
-            <h4>Error Generating Explanation</h4>
-            <p>An unexpected error occurred while generating the analysis. 
-            Please check the logs for details.</p>
-            <details>
-                <summary>Technical Details</summary>
-                <pre>{str(e)}</pre>
-            </details>
-        </div>
+        <div class="alert alert-danger"><h4>Error Generating Explanation</h4><p>An unexpected error occurred.</p><details><summary>Details</summary><pre>{str(e)}</pre></details></div>
         """

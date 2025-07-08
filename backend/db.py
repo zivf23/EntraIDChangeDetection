@@ -1,5 +1,4 @@
 ### backend/db.py (Fixed imports)
-```python
 """
 Database module for storing configuration snapshots and changes.
 """
@@ -7,21 +6,21 @@ Database module for storing configuration snapshots and changes.
 import sqlite3
 import json
 from datetime import datetime
-from flask import current_app, g
+from flask import g # g is used to store the database connection for the current request - initialized every web request
 from config import DATABASE_PATH
 
 def get_db():
     """Get database connection for current request."""
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE_PATH)
+    if 'db' not in g: # Check if db is already in g
+        g.db = sqlite3.connect(DATABASE_PATH) # Connect to the database - save it in g
         g.db.row_factory = sqlite3.Row
-    return g.db
+    return g.db # This returns the database connection stored in g - if we already have it, we return the existing connection
 
 def close_db(e=None):
     """Close database connection."""
     db = g.pop('db', None)
     if db is not None:
-        db.close()
+        db.close() # Close the database connection if it exists - g.pop removes the db from g and returns it, or None if it doesn't exist - not throwing an error if db is None
 
 def init_db():
     """Initialize database schema."""
@@ -37,22 +36,22 @@ def init_db():
     """)
     db.commit()
 
-def init_app(app):
+def init_app(app): 
     """Register database functions with Flask app."""
-    app.teardown_appcontext(close_db)
-    with app.app_context():
+    app.teardown_appcontext(close_db) # This registers the close_db function to be called when the app context ends - it will close the db connection if it exists
+    with app.app_context(): # This ensures the app context is available when initializing the database - run init_db() only once when the app starts
         init_db()
 
 def get_all_snapshots():
     """Retrieve all snapshots (id and timestamp only)."""
     db = get_db()
-    rows = db.execute("SELECT id, timestamp FROM snapshots ORDER BY timestamp DESC").fetchall()
+    rows = db.execute("SELECT id, timestamp FROM snapshots ORDER BY timestamp DESC").fetchall() # Fetch all snapshots ordered by timestamp in descending order
     return [{"id": row["id"], "timestamp": row["timestamp"]} for row in rows]
 
 def get_snapshot_details(snap_id):
     """Retrieve full details of a specific snapshot."""
     db = get_db()
-    current = db.execute("SELECT * FROM snapshots WHERE id=?", (snap_id,)).fetchone()
+    current = db.execute("SELECT * FROM snapshots WHERE id=?", (snap_id,)).fetchone() # Fetch the snapshot by ID - and convert text into python objects - and get the previous snapshot for comparison either by ID or by timestamp for comparison
     if not current:
         return None
     
@@ -75,14 +74,3 @@ def get_snapshot_details(snap_id):
         "changes": changes,
         "explanation": explanation
     }
-
-def save_snapshot(config, changes, explanation):
-    """Save a new configuration snapshot."""
-    db = get_db()
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%SZ")
-    db.execute(
-        "INSERT INTO snapshots (timestamp, config, changes, explanation) VALUES (?, ?, ?, ?)",
-        (timestamp, json.dumps(config), json.dumps(changes), explanation)
-    )
-    db.commit()
-    return timestamp
