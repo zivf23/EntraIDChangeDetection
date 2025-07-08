@@ -1,21 +1,28 @@
-# This Dockerfile is for the DEVELOPMENT environment ONLY
-# It runs the React development server with hot-reloading.
+# Dockerfile.dev
+
+# Use a specific version of Node.js for stability
 FROM node:18-alpine
 
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy dependency definitions
-# This is done first to leverage Docker's build cache
-COPY package.json package-lock.json ./
+# --- START OF FIX ---
+# Copy only the package definition and the npm configuration file first.
+# This allows Docker to cache the 'npm install' layer effectively.
+COPY package.json .npmrc ./
 
-# Install dependencies
+# Install dependencies. The .npmrc file will instruct npm to handle
+# peer dependency conflicts correctly. This command will also generate
+# the package-lock.json file inside the container.
 RUN npm install
+# --- END OF FIX ---
 
-# Copy the rest of the application source code
+
+# Now, copy the rest of the application source code
 COPY . .
 
-# The React development server will run on port 3000 by default
+# Expose the port the app runs on
 EXPOSE 3000
 
-# Start the React development server
+# Command to start the development server
 CMD ["npm", "start"]
