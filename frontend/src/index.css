@@ -10,7 +10,10 @@ body {
   @apply bg-slate-900 text-slate-200 antialiased;
   direction: rtl;
 }
-
+.modal-content-ltr {
+  direction: ltr;
+  text-align: left;
+}
 /* רכיב פנל כללי */
 @layer components {
   .panel {
@@ -129,6 +132,119 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
   animation: slideUp 0.3s ease-out;
+}
+.minimap-container {
+  position: relative;
+  width: 14px; /* Width of the minimap */
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.minimap-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 65, 85, 0.3); /* slate-700 with opacity */
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.minimap-marker {
+  position: absolute;
+  width: 100%;
+  height: 3px; /* Height of each change marker */
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.minimap-marker:hover {
+  transform: scaleX(1.5); /* Make marker slightly wider on hover */
+}
+
+.minimap-marker.added {
+  background-color: #34d399; /* emerald-400 for additions */
+}
+
+.minimap-marker.removed {
+  background-color: #f87171; /* red-400 for deletions */
+}
+
+
+.json-diff-viewer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.diff-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #334155; /* slate-700 */
+  flex-shrink: 0;
+}
+
+.diff-nav-status {
+  font-size: 0.875rem;
+  color: #94a3b8; /* slate-400 */
+  font-family: monospace;
+}
+
+.diff-content-area {
+  flex-grow: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.diff-viewer-wrapper {
+  overflow-y: auto;
+  flex-grow: 1;
+}
+.diff-viewer-wrapper:focus {
+  outline: none;
+}
+
+.minimap-container {
+  position: relative;
+  width: 14px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.minimap-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(51, 65, 85, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.minimap-marker {
+  position: absolute;
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.minimap-marker:hover {
+  transform: scaleX(1.5);
+}
+
+.minimap-marker.added {
+  background-color: #34d399; /* emerald-400 */
+}
+
+.minimap-marker.removed {
+  background-color: #f87171; /* red-400 */
 }
 
 @keyframes slideUp {

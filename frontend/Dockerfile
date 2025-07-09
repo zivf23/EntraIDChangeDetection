@@ -1,3 +1,5 @@
+# format: Dockerfile
+
 # ===================================================================
 # STAGE 1: The "Builder" Stage
 # Purpose: To build the optimized, static React application.

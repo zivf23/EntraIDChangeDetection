@@ -4,21 +4,24 @@
   "proxy": "http://backend:5000",
   "private": true,
   "dependencies": {
+    "ajv": "^8.12.1",
+    "ajv-keywords": "^5.1.0",
     "autoprefixer": "^10.4.19",
     "dompurify": "^3.1.5",
-    "jsoneditor": "^9.10.0",
+    "jsoneditor": "^9.10.5",
     "jsoneditor-react": "^3.1.2",
-    "monaco-editor": "^0.52.2",
     "postcss": "^8.4.38",
     "react": "^18.3.1",
+    "react-diff-viewer": "^3.1.1",
     "react-dom": "^18.3.1",
+    "react-json-view": "^1.21.3",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.4"
   },
-  "scripts": {
-    "start": "react-app-rewired start",
-    "build": "react-app-rewired build",
-    "test": "react-app-rewired test",
+    "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -38,9 +41,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "react-app-rewired": "^2.2.1",
-    "worker-loader": "^3.0.8"
   }
 }

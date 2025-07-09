@@ -1,4 +1,4 @@
-# Dockerfile.dev
+# Dockerfile.dev - frontend Dockerfile for development
 
 # Use a specific version of Node.js for stability
 FROM node:18-alpine
@@ -9,7 +9,7 @@ WORKDIR /app
 # --- START OF FIX ---
 # Copy only the package definition and the npm configuration file first.
 # This allows Docker to cache the 'npm install' layer effectively.
-COPY package.json .npmrc ./
+COPY package.json package-lock.json .npmrc ./
 
 # Install dependencies. The .npmrc file will instruct npm to handle
 # peer dependency conflicts correctly. This command will also generate
